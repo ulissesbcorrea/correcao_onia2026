@@ -11,7 +11,7 @@ from app.utils.pagination import paginate_query
 @fraud_bp.route("/alerts", methods=["GET"])
 @jwt_required()
 def list_alerts():
-    query = FraudFlag.query.join(Student)
+    query = FraudFlag.query.join(Student, FraudFlag.student_id == Student.id)
 
     level = request.args.get("level")
     if level:
@@ -23,7 +23,7 @@ def list_alerts():
 
     school = request.args.get("school")
     if school:
-        query = query.join(School).filter(School.name.ilike(f"%{school}%"))
+        query = query.join(School, Student.school_id == School.id).filter(School.name.ilike(f"%{school}%"))
 
     resolved = request.args.get("resolved")
     if resolved is not None:
