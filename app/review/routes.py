@@ -1,11 +1,13 @@
+import os
 from datetime import datetime, timezone
-from flask import request, jsonify
+from flask import request, jsonify, send_file
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.review import review_bp
 from app.auth.decorators import evaluator_required
 from app.extensions import db
-from app.models import Student, Review, FraudFlag, Answer, Justification, ApprovalCounter
+from app.models import Student, Review, FraudFlag, Answer, Justification, ApprovalCounter, Evaluator
 from app.utils.pagination import paginate_query
+from app.upload.image_service import find_student_images, GABARITOS_DIR
 
 
 @review_bp.route("/queue", methods=["GET"])
@@ -69,6 +71,60 @@ def submission_detail(student_id):
     data["review"] = review.to_dict() if review else None
 
     return jsonify({"submission": data})
+
+
+@review_bp.route("/images/<path:img_path>")
+@evaluator_required
+def serve_image(img_path):
+    """Serve justification images from gabaritos folder."""
+    full_path = os.path.join(GABARITOS_DIR, img_path)
+    if not os.path.isfile(full_path):
+        return jsonify({"error": "Image not found"}), 404
+    return send_file(full_path)
+
+
+@review_bp.route("/submissions/<int:student_id>/images")
+@evaluator_required
+def student_images(student_id):
+    """Get all justification images for a student."""
+    student = db.session.get(Student, student_id)
+    if not student:
+        return jsonify({"error": "Student not found"}), 404
+    images = find_student_images(student.xlsx_id, student.name)
+    result = []
+    for img in images:
+        rel = os.path.relpath(img["path"], GABARITOS_DIR)
+        result.append({
+            "name": img["name"],
+            "polo": img["polo"],
+            "url": f"/api/review/images/{rel}",
+        })
+    return jsonify({"images": result, "student_name": student.name})
+
+
+@review_bp.route("/compare/<int:student1_id>/<int:student2_id>")
+@evaluator_required
+def compare_students(student1_id, student2_id):
+    """Get side-by-side data for two students (fraud comparison)."""
+    s1 = db.session.get(Student, student1_id)
+    s2 = db.session.get(Student, student2_id)
+    if not s1 or not s2:
+        return jsonify({"error": "Student not found"}), 404
+
+    def student_data(s):
+        images = find_student_images(s.xlsx_id, s.name)
+        imgs = []
+        for img in images:
+            rel = os.path.relpath(img["path"], GABARITOS_DIR)
+            imgs.append({"name": img["name"], "url": f"/api/review/images/{rel}"})
+        answers = [a.to_dict() for a in Answer.query.filter_by(student_id=s.id).order_by(Answer.question_number).all()]
+        return {
+            "id": s.id, "name": s.name, "score": s.score,
+            "school": s.school.name if s.school else None,
+            "images": imgs, "answers": answers,
+        }
+
+    return jsonify({"student1": student_data(s1), "student2": student_data(s2)})
 
 
 @review_bp.route("/submissions/<int:student_id>/approve", methods=["POST"])

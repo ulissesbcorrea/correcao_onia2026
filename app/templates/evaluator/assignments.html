@@ -127,22 +127,30 @@
         if(s.answers&&s.answers.length){
             answersHtml='<h6>Respostas</h6><div class="answer-grid">'+s.answers.map(a=>`<div class="answer-cell ${a.selected_option?'selected':''}">Q${a.question_number}<br><strong>${a.selected_option||'-'}</strong></div>`).join('')+'</div>';
         }
-        let justHtml='';
-        if(s.justifications&&s.justifications.length){
-            justHtml='<h6>Justificativa</h6>'+s.justifications.map(j=>`<img src="${j.photo_url}" class="photo-thumb mb-2" onclick="showPhoto('${j.photo_url}')" onerror="this.style.display='none'">`).join('');
-        }
-        justHtml += '<div class="alert alert-info py-2 mt-2"><strong>📸 Plataforma de Correção:</strong><br><a href="https://olimpico.eduspace.com.br/web/public/users/onboarding/start" target="_blank">Acessar Eduspace</a><br><small class="text-muted">Email: hub2ia_2onia@eduspace.com.br | Senha: hub2i@</small></div>';
+
+        // Load images from API
+        let imagesHtml='<div id="imagesContainer"><div class="spinner-border spinner-border-sm"></div> Carregando imagens...</div>';
+
         let fraudHtml='';
         if(s.fraud_flags&&s.fraud_flags.length){
-            fraudHtml='<div class="alert alert-warning py-2"><strong>⚠️ Alertas de Fraude:</strong><br>'+s.fraud_flags.map(f=>`<span class="badge bg-${f.level==='critical'?'danger':f.level==='high'?'warning':'info'} me-1">${f.level}</span> ${f.reason}`).join('<br>')+'</div>';
+            fraudHtml='<div class="alert alert-warning py-2"><strong>⚠️ Alertas de Fraude:</strong><br>'+s.fraud_flags.map(f=>{
+                let compBtn='';
+                if(f.related_student_id){
+                    compBtn=` <button class="btn btn-outline-danger btn-sm py-0 ms-1" onclick="compareStudents(${f.student_id},${f.related_student_id})">🔍 Comparar</button>`;
+                }
+                return `<span class="badge bg-${f.level==='critical'?'danger':f.level==='high'?'warning':'info'} me-1">${f.level}</span> ${f.reason}${compBtn}`;
+            }).join('<br>')+'</div>';
         }
+
         document.getElementById('detailCard').innerHTML=`
             <div class="card-header d-flex justify-content-between"><strong>${s.name}</strong><span class="badge bg-${reviewed?(r.decision==='approved'?'success':'danger'):'warning'}">${reviewed?r.decision:'Pendente'}</span></div>
-            <div class="card-body">
+            <div class="card-body" style="max-height:75vh;overflow-y:auto">
                 <table class="table table-sm"><tr><td>Escola</td><td>${s.school_name||'-'}</td></tr><tr><td>Cidade/UF</td><td>${s.school_city||''} ${s.school_state||''}</td></tr><tr><td>Acertos</td><td><strong>${s.score??'-'}/20</strong></td></tr><tr><td>Status</td><td>${s.status}</td></tr></table>
                 ${fraudHtml}
                 ${answersHtml}
-                ${justHtml}
+                <h6 class="mt-2">Justificativas</h6>
+                ${imagesHtml}
+                <div class="alert alert-info py-2 mt-2"><small>📸 <a href="https://olimpico.eduspace.com.br/web/public/users/onboarding/start" target="_blank">Eduspace</a> | hub2ia_2onia@eduspace.com.br / hub2i@</small></div>
                 <hr>
                 ${!reviewed?`
                 <div class="d-flex gap-2 mb-2">
@@ -152,6 +160,38 @@
                 <textarea class="form-control form-control-sm" id="reviewNotes" placeholder="Comentário (opcional)"></textarea>`:`<p class="text-muted">Revisado: ${r.reviewed_at?new Date(r.reviewed_at).toLocaleString():''}<br>${r.notes||''}</p>`}
                 ${r?"<hr><small class='text-muted'>Avaliador: "+r.evaluator_name+"</small>":""}
             </div>`;
+
+        // Load images async
+        loadStudentImages(sid);
+    }
+
+    async function loadStudentImages(sid){
+        const d=await get(`/api/review/submissions/${sid}/images`);
+        if(!d||!d.images) return;
+        const container=document.getElementById('imagesContainer');
+        if(d.images.length===0){
+            container.innerHTML='<p class="text-muted small">Nenhuma imagem de justificativa encontrada.</p>';
+            return;
+        }
+        container.innerHTML=d.images.map(img=>
+            `<div class="mb-2"><strong>${img.name}</strong><br><img src="${BASE+img.url}" class="photo-thumb" onclick="showPhoto('${BASE+img.url}')" style="max-width:100%;max-height:300px;cursor:pointer;border:1px solid #ddd;border-radius:4px" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%22200%22 height=%22100%22><text x=%2250%25%22 y=%2250%25%22 text-anchor=%22middle%22 fill=%22gray%22>Erro</text></svg>'"></div>`
+        ).join('');
+    }
+
+    async function compareStudents(sid1, sid2){
+        const d=await get(`/api/review/compare/${sid1}/${sid2}`);
+        if(!d)return;
+
+        function renderStudent(s){
+            let imgs=s.images.map(img=>`<img src="${BASE+img.url}" class="photo-thumb m-1" onclick="showPhoto('${BASE+img.url}')" style="max-width:48%;max-height:200px" onerror="this.style.display='none'">`).join('');
+            return `<div class="col-6 border-end"><h6>${s.name}</h6><p class="small">Escola: ${s.school||'-'} | Acertos: ${s.score}/20</p>
+                <div class="answer-grid mb-2">${(s.answers||[]).map(a=>`<div class="answer-cell ${a.selected_option?'selected':''}">Q${a.question_number}<br><strong>${a.selected_option||'-'}</strong></div>`).join('')}</div>
+                <div>${imgs||'<small class="text-muted">Sem imagens</small>'}</div></div>`;
+        }
+
+        document.getElementById('detailCard').innerHTML=`
+            <div class="card-header d-flex justify-content-between"><strong>🔍 Comparação</strong><button class="btn btn-sm btn-outline-secondary" onclick="loadDetail(${sid1})">← Voltar</button></div>
+            <div class="card-body" style="max-height:75vh;overflow-y:auto"><div class="row">${renderStudent(d.student1)}${renderStudent(d.student2)}</div></div>`;
     }
 
     async function decide(sid,decision){

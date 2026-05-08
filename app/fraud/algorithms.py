@@ -2,7 +2,8 @@
 
 from app.extensions import db
 from app.models import Student, School, Answer, Justification, FraudFlag
-from sqlalchemy import func
+from app.upload.image_service import find_student_images
+from rapidfuzz import fuzz
 
 
 def detect_identical_answers_same_school(batch_id):
@@ -159,4 +160,74 @@ def run_all_fraud_detection(batch_id, skip_no_justification=True):
         results["no_justification"] = detect_no_justification(batch_id)
     results["identical_answers"] = detect_identical_answers_same_school(batch_id)
     results["identical_justifications"] = detect_similar_justifications(batch_id)
+    results["ocr_similarity"] = detect_ocr_text_similarity(batch_id)
     return results
+
+
+def detect_ocr_text_similarity(batch_id):
+    """Compare OCR-extracted text from justifications of same-school students."""
+    from app.fraud.ocr import extract_text
+
+    new_flags = 0
+    students = Student.query.filter_by(import_batch_id=batch_id).all()
+    schools_map = {}
+    for s in students:
+        schools_map.setdefault(s.school_id, []).append(s)
+
+    for school_id, school_students in schools_map.items():
+        if len(school_students) < 2:
+            continue
+
+        # Pre-extract texts for efficiency
+        student_texts = {}
+        for s in school_students:
+            images = find_student_images(s.xlsx_id, s.name)
+            paths = [img["path"] for img in images]
+            if paths:
+                text = extract_text(paths[0])  # answer_sheet usually
+                if text and len(text) > 20:
+                    student_texts[s.id] = text
+
+        for i in range(len(school_students)):
+            for j in range(i + 1, len(school_students)):
+                s1 = school_students[i]
+                s2 = school_students[j]
+                t1 = student_texts.get(s1.id)
+                t2 = student_texts.get(s2.id)
+                if not t1 or not t2:
+                    continue
+
+                similarity = fuzz.ratio(t1, t2) / 100.0
+
+                level = None
+                reason = None
+                if similarity >= 0.90:
+                    level = "critical"
+                    reason = f"Textos OCR {similarity*100:.0f}% idênticos na mesma escola"
+                elif similarity >= 0.75:
+                    level = "high"
+                    reason = f"Textos OCR {similarity*100:.0f}% similares na mesma escola"
+
+                if level:
+                    existing = FraudFlag.query.filter_by(
+                        student_id=s1.id,
+                        related_student_id=s2.id,
+                        algorithm_name="ocr_similarity",
+                    ).first()
+                    if not existing:
+                        flag = FraudFlag(
+                            student_id=s1.id,
+                            related_student_id=s2.id,
+                            source="algorithmic",
+                            level=level,
+                            reason=reason,
+                            algorithm_name="ocr_similarity",
+                        )
+                        db.session.add(flag)
+                        s1.is_flagged = True
+                        if not s1.flag_level or level == "critical":
+                            s1.flag_level = level
+                        new_flags += 1
+
+    db.session.commit()
+    return {"algorithm": "ocr_similarity", "new_flags": new_flags}
