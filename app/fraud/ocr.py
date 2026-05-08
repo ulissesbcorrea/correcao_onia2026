@@ -71,7 +71,8 @@ def extract_text(image_path, prompt=None):
     try:
         with urllib.request.urlopen(req, timeout=180) as resp:
             result = json.loads(resp.read().decode("utf-8"))
-            content = result.get("choices", [{}])[0].get("message", {}).get("content", "")
+            msg = result.get("choices", [{}])[0].get("message", {})
+            content = msg.get("content") or msg.get("reasoning_content") or ""
             return content.strip()
     except Exception as e:
         return f"[OCR error: {e}]"
@@ -134,7 +135,8 @@ Responda em JSON:
     try:
         with urllib.request.urlopen(req, timeout=180) as resp:
             result = json.loads(resp.read().decode("utf-8"))
-            content = result.get("choices", [{}])[0].get("message", {}).get("content", "")
+            msg = result.get("choices", [{}])[0].get("message", {})
+            content = msg.get("content") or msg.get("reasoning_content") or ""
             content = content.strip()
             if content.startswith("```"):
                 content = content.split("\n", 1)[1].rsplit("\n", 1)[0]
