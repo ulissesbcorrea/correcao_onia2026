@@ -1,0 +1,22 @@
+[Unit]
+Description=ONIA Fraud Detection Dashboard
+After=network.target
+
+[Service]
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/home/ubuntu/servers/correcao_onia2026
+Environment="PATH=/home/ubuntu/servers/correcao_onia2026/venv/bin"
+ExecStart=/home/ubuntu/servers/correcao_onia2026/venv/bin/gunicorn \
+    --workers 4 \
+    --bind 127.0.0.1:8001 \
+    --timeout 120 \
+    --log-level info \
+    --access-logfile /var/log/onia-access.log \
+    --error-logfile /var/log/onia-error.log \
+    run:application
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

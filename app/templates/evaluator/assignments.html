@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ONIA — Revisão</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        .table-warning-custom { background-color: #fff9c4 !important; }
+        .table-critical { background-color: #ffcdd2 !important; }
+        .photo-thumb { max-width: 200px; max-height: 200px; cursor: pointer; object-fit: contain; border: 1px solid #ddd; border-radius: 4px; }
+        .photo-thumb:hover { opacity: 0.8; transform: scale(1.02); }
+        .answer-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; }
+        .answer-cell { text-align: center; padding: 8px; border: 1px solid #dee2e6; border-radius: 4px; font-size: 0.85rem; }
+        .answer-cell.selected { background: #cfe2ff; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container-fluid">
+            <a class="navbar-brand fw-bold" href="/dashboard">🔍 ONIA</a>
+            <div class="navbar-nav ms-auto align-items-center">
+                <div id="progressWidget" class="d-flex align-items-center gap-2 me-3"></div>
+                <a class="btn btn-outline-light btn-sm" href="/logout">Sair</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid mt-4">
+        <div class="row">
+            <!-- Student List -->
+            <div class="col-md-7">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <strong>Meus Alunos</strong>
+                        <div class="btn-group btn-group-sm">
+                            <button class="btn btn-outline-secondary" onclick="filterQueue('')">Todos</button>
+                            <button class="btn btn-outline-warning" onclick="filterQueue('pending')">Pendentes</button>
+                            <button class="btn btn-outline-success" onclick="filterQueue('approved')">Aprovados</button>
+                            <button class="btn btn-outline-danger" onclick="filterQueue('rejected')">Rejeitados</button>
+                        </div>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="p-2"><input class="form-control form-control-sm" placeholder="Buscar por nome..." id="searchInput" oninput="loadQueue()"></div>
+                        <div style="max-height: 70vh; overflow-y: auto;">
+                            <table class="table table-hover table-sm mb-0">
+                                <thead><tr><th>#</th><th>Nome</th><th>Escola</th><th>Acertos</th><th>Status</th><th>Ação</th></tr></thead>
+                                <tbody id="queueTable"></tbody>
+                            </table>
+                        </div>
+                        <div class="p-2 d-flex justify-content-between align-items-center" id="pagination"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Detail Panel -->
+            <div class="col-md-5">
+                <div class="card" id="detailCard">
+                    <div class="card-body text-center text-muted py-5">
+                        <i class="bi bi-arrow-left-circle" style="font-size:2rem"></i>
+                        <p>Selecione um aluno para revisar</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Photo Modal -->
+    <div class="modal fade" id="photoModal" tabindex="-1"><div class="modal-dialog modal-lg modal-dialog-centered"><div class="modal-content">
+        <div class="modal-header"><h6>Justificativa</h6><button class="btn-close" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body text-center"><img id="photoFull" class="img-fluid" style="max-height:80vh"></div>
+    </div></div></div>
+
+    <div class="toast-container position-fixed bottom-0 end-0 p-3" id="toastContainer"></div>
+
+    <!-- Goal Modal -->
+    <div class="modal fade" id="goalModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content text-center">
+        <div class="modal-header bg-success text-white justify-content-center"><h5>🎉 200 Aprovações! 🎉</h5></div>
+        <div class="modal-body"><p class="fs-4">Meta atingida!</p><div class="display-1">🏆</div></div>
+        <div class="modal-footer justify-content-center"><button class="btn btn-success" data-bs-dismiss="modal">OK</button></div>
+    </div></div></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+    const T=localStorage.getItem('access_token'),H={'Content-Type':'application/json','Authorization':`Bearer ${T}`};
+    async function get(u){const r=await fetch(u,{headers:H});if(r.status===401)window.location='/login';return r.json()}
+    async function post(u,d){const r=await fetch(u,{method:'POST',headers:H,body:JSON.stringify(d||{})});if(r.status===401)window.location='/login';return r.json()}
+    function toast(m,t='success'){const c=document.getElementById('toastContainer');c.innerHTML=`<div class="toast align-items-center text-white ${t==='error'?'bg-danger':'bg-success'} border-0"><div class="d-flex"><div class="toast-body">${m}</div></div></div>`;new bootstrap.Toast(c.firstElementChild,{delay:3000}).show()}
+
+    let currentPage=1,currentFilter='',goalShown=false,currentStudent=null;
+
+    async function loadQueue(page=1){
+        currentPage=page;
+        const search=document.getElementById('searchInput').value;
+        let url=`/api/review/queue?page=${page}&per_page=15`;
+        if(currentFilter)url+=`&status=${currentFilter}`;
+        if(search)url+=`&search=${encodeURIComponent(search)}`;
+        const d=await get(url);
+        if(!d)return;
+        const t=document.getElementById('queueTable');
+        t.innerHTML=d.items.map(i=>{
+            let rowClass='';
+            if(i.flag_level==='critical')rowClass='table-critical';
+            else if(i.is_flagged)rowClass='table-warning-custom';
+            return `<tr class="${rowClass}" onclick="loadDetail(${i.student_id})" style="cursor:pointer">
+                <td>${i.student_id}</td><td>${i.is_flagged?'⚠️ ':''}${i.student_name||'-'}</td>
+                <td>${i.school_name||'-'}</td><td>${i.score??'-'}</td>
+                <td><span class="badge bg-${i.decision==='approved'?'success':i.decision==='rejected'?'danger':'warning'}">${i.decision}</span></td>
+                <td><button class="btn btn-outline-primary btn-sm">Revisar</button></td></tr>`;
+        }).join('');
+        const pg=d.pagination;
+        document.getElementById('pagination').innerHTML=`<small>Página ${pg.page}/${pg.pages} (${pg.total} alunos)</small>
+            <div class="btn-group btn-group-sm">${pg.has_prev?`<button class="btn btn-outline-secondary" onclick="loadQueue(${pg.page-1})">◀</button>`:''}${pg.has_next?`<button class="btn btn-outline-secondary" onclick="loadQueue(${pg.page+1})">▶</button>`:''}</div>`;
+    }
+
+    async function loadDetail(sid){
+        currentStudent=sid;
+        const d=await get(`/api/review/submissions/${sid}`);
+        if(!d||!d.submission)return;
+        const s=d.submission;
+        const r=s.review;
+        const reviewed=r&&r.decision!=='pending';
+        let answersHtml='';
+        if(s.answers&&s.answers.length){
+            answersHtml='<h6>Respostas</h6><div class="answer-grid">'+s.answers.map(a=>`<div class="answer-cell ${a.selected_option?'selected':''}">Q${a.question_number}<br><strong>${a.selected_option||'-'}</strong></div>`).join('')+'</div>';
+        }
+        let justHtml='';
+        if(s.justifications&&s.justifications.length){
+            justHtml='<h6>Justificativa</h6>'+s.justifications.map(j=>`<img src="${j.photo_url}" class="photo-thumb mb-2" onclick="showPhoto('${j.photo_url}')" onerror="this.style.display='none'">`).join('');
+        }
+        justHtml += '<div class="alert alert-info py-2 mt-2"><strong>📸 Plataforma de Correção:</strong><br><a href="https://olimpico.eduspace.com.br/web/public/users/onboarding/start" target="_blank">Acessar Eduspace</a><br><small class="text-muted">Email: hub2ia_2onia@eduspace.com.br | Senha: hub2i@</small></div>';
+        let fraudHtml='';
+        if(s.fraud_flags&&s.fraud_flags.length){
+            fraudHtml='<div class="alert alert-warning py-2"><strong>⚠️ Alertas de Fraude:</strong><br>'+s.fraud_flags.map(f=>`<span class="badge bg-${f.level==='critical'?'danger':f.level==='high'?'warning':'info'} me-1">${f.level}</span> ${f.reason}`).join('<br>')+'</div>';
+        }
+        document.getElementById('detailCard').innerHTML=`
+            <div class="card-header d-flex justify-content-between"><strong>${s.name}</strong><span class="badge bg-${reviewed?(r.decision==='approved'?'success':'danger'):'warning'}">${reviewed?r.decision:'Pendente'}</span></div>
+            <div class="card-body">
+                <table class="table table-sm"><tr><td>Escola</td><td>${s.school_name||'-'}</td></tr><tr><td>Cidade/UF</td><td>${s.school_city||''} ${s.school_state||''}</td></tr><tr><td>Acertos</td><td><strong>${s.score??'-'}/20</strong></td></tr><tr><td>Status</td><td>${s.status}</td></tr></table>
+                ${fraudHtml}
+                ${answersHtml}
+                ${justHtml}
+                <hr>
+                ${!reviewed?`
+                <div class="d-flex gap-2 mb-2">
+                    <button class="btn btn-success flex-grow-1" onclick="decide(${sid},'approved')">✅ Aprovar</button>
+                    <button class="btn btn-danger flex-grow-1" onclick="decide(${sid},'rejected')">❌ Rejeitar</button>
+                </div>
+                <textarea class="form-control form-control-sm" id="reviewNotes" placeholder="Comentário (opcional)"></textarea>`:`<p class="text-muted">Revisado: ${r.reviewed_at?new Date(r.reviewed_at).toLocaleString():''}<br>${r.notes||''}</p>`}
+                ${r?"<hr><small class='text-muted'>Avaliador: "+r.evaluator_name+"</small>":""}
+            </div>`;
+    }
+
+    async function decide(sid,decision){
+        const notes=document.getElementById('reviewNotes')?.value||'';
+        const d=await post(`/api/review/submissions/${sid}/${decision}`,{notes});
+        if(d.message){toast(`Aluno ${decision==='approved'?'aprovado':'rejeitado'}!`);
+            loadDetail(sid);loadQueue(currentPage);
+            if(d.approval_count&&d.approval_count.alert&&!goalShown){goalShown=true;new bootstrap.Modal(document.getElementById('goalModal')).show();}
+        }else toast(d.error||'Erro','error');
+    }
+
+    function filterQueue(f){currentFilter=f;loadQueue(1);}
+    function showPhoto(url){document.getElementById('photoFull').src=url;new bootstrap.Modal(document.getElementById('photoModal')).show();}
+
+    async function loadProgress(){
+        const d=await get('/api/dashboard/counter');if(!d)return;
+        document.getElementById('progressWidget').innerHTML=`<span class="text-light small">${d.count}/${d.goal} (${d.percentage}%)</span>`;
+        if(d.alert&&!goalShown){goalShown=true;new bootstrap.Modal(document.getElementById('goalModal')).show();}
+    }
+
+    loadQueue();loadProgress();setInterval(loadProgress,30000);
+    </script>
+</body>
+</html>
