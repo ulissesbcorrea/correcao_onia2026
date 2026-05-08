@@ -107,6 +107,13 @@
                         <div class="col-2"><button class="btn btn-success w-100">+</button></div>
                     </div>
                 </form>
+                <hr>
+                <div class="mb-2"><strong>📤 Importar em lote (XLSX)</strong></div>
+                <div class="text-muted small mb-2">Colunas: Nome | Email | Senha</div>
+                <input type="file" id="batchEvalFile" accept=".xlsx" hidden onchange="uploadBatchEval(this)">
+                <button class="btn btn-outline-primary btn-sm" onclick="document.getElementById('batchEvalFile').click()">Selecionar XLSX</button>
+                <div id="batchEvalStatus" class="mt-1 small"></div>
+                <hr>
                 <table class="table table-sm"><tbody id="evaluatorList"></tbody></table>
             </div>
         </div></div>
@@ -171,7 +178,7 @@
         const s=document.getElementById('uploadStatus');
         s.innerHTML='<div class="spinner-border spinner-border-sm"></div> Processando...';
         const fd=new FormData();fd.append('file',file);
-        const r=await fetch('/api/upload/xlsx',{method:'POST',headers:{'Authorization':`Bearer ${TOKEN}`},body:fd});
+        const r=await fetch(BASE+'/api/upload/xlsx',{method:'POST',headers:{'Authorization':`Bearer ${TOKEN}`},body:fd});
         const d=await r.json();
         if(r.ok){s.innerHTML=`<span class="text-success">✔ Importado: ${d.rows_imported} alunos, ${d.rows_flagged} flags</span>`;loadStats();}
         else s.innerHTML=`<span class="text-danger">Erro: ${d.error}</span>`;
@@ -195,8 +202,19 @@
 
     async function deleteEval(id){
         if(!confirm('Desativar avaliador?'))return;
-        const r=await fetch('/api/auth/evaluators/'+id,{method:'DELETE',headers:H});
+        const r=await fetch(BASE+'/api/auth/evaluators/'+id,{method:'DELETE',headers:H});
         if(r.ok){toast('Avaliador desativado');showEvaluators();}
+    }
+
+    async function uploadBatchEval(input){
+        const file=input.files[0];if(!file)return;
+        const s=document.getElementById('batchEvalStatus');
+        s.innerHTML='<div class="spinner-border spinner-border-sm"></div> Importando...';
+        const fd=new FormData();fd.append('file',file);
+        const r=await fetch(BASE+'/api/auth/evaluators/batch',{method:'POST',headers:{'Authorization':`Bearer ${TOKEN}`},body:fd});
+        const d=await r.json();
+        if(r.ok){s.innerHTML='<span class="text-success">✔ '+d.message+'</span>';showEvaluators();}
+        else s.innerHTML='<span class="text-danger">'+(d.error||'Erro')+'</span>';
     }
 
     async function distribute(){

@@ -1,5 +1,6 @@
-import bcrypt
+import bcrypt, os, openpyxl
 from flask import request, jsonify
+from werkzeug.utils import secure_filename
 from flask_jwt_extended import (
     create_access_token,
     create_refresh_token,
@@ -12,6 +13,9 @@ from app.auth import auth_bp
 from app.auth.decorators import admin_required
 from app.extensions import db
 from app.models import Evaluator
+
+
+UPLOAD_FOLDER = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "uploads")
 
 
 @auth_bp.route("/login", methods=["POST"])
@@ -90,12 +94,66 @@ def create_evaluator():
     return jsonify({"evaluator": evaluator.to_dict()}), 201
 
 
-@auth_bp.route("/evaluators/<int:evaluator_id>", methods=["DELETE"])
+@auth_bp.route("/evaluators/batch", methods=["POST"])
 @admin_required
-def delete_evaluator(evaluator_id):
-    evaluator = db.session.get(Evaluator, evaluator_id)
-    if not evaluator:
-        return jsonify({"error": "Not found"}), 404
-    evaluator.is_active = False
+def batch_create_evaluators():
+    if "file" not in request.files:
+        return jsonify({"error": "No file provided"}), 400
+
+    file = request.files["file"]
+    if not file.filename.endswith(".xlsx"):
+        return jsonify({"error": "Only .xlsx files accepted"}), 400
+
+    os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+    filepath = os.path.join(UPLOAD_FOLDER, secure_filename(file.filename))
+    file.save(filepath)
+
+    wb = openpyxl.load_workbook(filepath, data_only=True)
+    ws = wb.active
+
+    # Map columns from header
+    header = {}
+    for col in range(1, ws.max_column + 1):
+        val = str(ws.cell(row=1, column=col).value or "").strip().lower()
+        header[val] = col
+
+    name_col = header.get("nome", 1)
+    email_col = header.get("email", 2)
+    password_col = header.get("senha", header.get("password", 3))
+
+    created = []
+    skipped = []
+    errors = []
+
+    for row in range(2, ws.max_row + 1):
+        name = str(ws.cell(row=row, column=name_col).value or "").strip()
+        email = str(ws.cell(row=row, column=email_col).value or "").strip().lower()
+        password = str(ws.cell(row=row, column=password_col).value or "").strip()
+
+        if not name or not email:
+            continue
+
+        if Evaluator.query.filter_by(email=email).first():
+            skipped.append({"row": row, "email": email, "reason": "Email already exists"})
+            continue
+
+        if not password:
+            password = "onia2026"
+
+        try:
+            password_hash = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+            evaluator = Evaluator(name=name, email=email, password_hash=password_hash, role="evaluator")
+            db.session.add(evaluator)
+            db.session.flush()
+            created.append({"id": evaluator.id, "name": name, "email": email})
+        except Exception as e:
+            errors.append({"row": row, "email": email, "reason": str(e)})
+
     db.session.commit()
-    return jsonify({"message": "Evaluator deactivated"})
+
+    return jsonify({
+        "message": f"Batch completed: {len(created)} created, {len(skipped)} skipped, {len(errors)} errors",
+        "created": created,
+        "skipped": skipped,
+        "errors": errors,
+    }), 201
