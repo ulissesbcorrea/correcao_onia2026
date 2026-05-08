@@ -68,11 +68,9 @@ def submission_list_api():
     }
     sort_col = sort_map.get(sort_by, Student.name)
     if order == "desc":
-        query = query.order_by(sort_col.desc())
+        query = query.order_by(sort_col.desc(), Student.name.asc())
     else:
-        query = query.order_by(sort_col.asc())
-
-    query = query.order_by(Student.is_flagged.desc())
+        query = query.order_by(sort_col.asc(), Student.name.asc())
 
     result = paginate_query(query)
     items = []
