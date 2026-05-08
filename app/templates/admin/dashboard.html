@@ -190,10 +190,11 @@
     <script>
     const BASE = localStorage.getItem('base_path') || '';
     const TOKEN = localStorage.getItem('access_token');
+    if(!TOKEN){window.location=BASE+'/login';}
     const H = {'Content-Type':'application/json','Authorization':`Bearer ${TOKEN}`};
     function logout(){localStorage.clear();window.location=BASE+'/login';}
-    async function get(url){const r=await fetch(BASE+url,{headers:H});if(r.status===401)window.location=BASE+'/login';return r.json();}
-    async function post(url,data){const r=await fetch(BASE+url,{method:'POST',headers:H,body:JSON.stringify(data||{})});if(r.status===401)window.location=BASE+'/login';return r.json();}
+    async function get(url){const r=await fetch(BASE+url,{headers:H});if(r.status===401){localStorage.clear();window.location=BASE+'/login';}return r.json();}
+    async function post(url,data){const r=await fetch(BASE+url,{method:'POST',headers:H,body:JSON.stringify(data||{})});if(r.status===401){localStorage.clear();window.location=BASE+'/login';}return r.json();}
     function toast(m,t='success'){const c=document.getElementById('toastContainer');
         c.innerHTML=`<div class="toast align-items-center text-white ${t==='error'?'bg-danger':'bg-success'} border-0"><div class="d-flex"><div class="toast-body">${m}</div><button class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button></div></div>`;
         new bootstrap.Toast(c.firstElementChild,{delay:3000}).show();}
