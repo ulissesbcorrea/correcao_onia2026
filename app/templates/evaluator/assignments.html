@@ -97,22 +97,29 @@
     async function loadQueue(page=1){
         currentPage=page;
         const search=document.getElementById('searchInput').value;
-        let url=`/api/review/queue?page=${page}&per_page=15`;
+        let url=`/api/review/queue?page=${page}&per_page=20`;
         if(currentFilter)url+=`&status=${currentFilter}`;
         if(search)url+=`&search=${encodeURIComponent(search)}`;
         const d=await get(url);
         if(!d)return;
         const t=document.getElementById('queueTable');
-        t.innerHTML=d.items.map(i=>{
+        let prevPolo=null, html='';
+        d.items.forEach(i=>{
             let rowClass='';
             if(i.flag_level==='critical')rowClass='table-critical';
             else if(i.is_flagged)rowClass='table-warning-custom';
-            return `<tr class="${rowClass}" onclick="loadDetail(${i.student_id})" style="cursor:pointer">
+            const polo=i.polo||'-';
+            if(polo!==prevPolo){
+                html+=`<tr class="table-secondary"><td colspan="6"><strong>📍 ${polo}</strong></td></tr>`;
+                prevPolo=polo;
+            }
+            html+=`<tr class="${rowClass}" onclick="loadDetail(${i.student_id})" style="cursor:pointer">
                 <td>${i.student_id}</td><td>${i.is_flagged?'⚠️ ':''}${i.student_name||'-'}</td>
                 <td>${i.school_name||'-'}</td><td>${i.score??'-'}</td>
                 <td><span class="badge bg-${i.decision==='approved'?'success':i.decision==='rejected'?'danger':'warning'}">${i.decision}</span></td>
                 <td><button class="btn btn-outline-primary btn-sm">Revisar</button></td></tr>`;
-        }).join('');
+        });
+        t.innerHTML=html;
         const pg=d.pagination;
         document.getElementById('pagination').innerHTML=`<small>Página ${pg.page}/${pg.pages} (${pg.total} alunos)</small>
             <div class="btn-group btn-group-sm">${pg.has_prev?`<button class="btn btn-outline-secondary" onclick="loadQueue(${pg.page-1})">◀</button>`:''}${pg.has_next?`<button class="btn btn-outline-secondary" onclick="loadQueue(${pg.page+1})">▶</button>`:''}</div>`;

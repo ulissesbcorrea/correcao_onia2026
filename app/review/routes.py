@@ -17,8 +17,12 @@ def review_queue():
     user = db.session.get(Evaluator, user_id)
 
     if user and user.role == "admin":
-        # Admin sees all students
-        query = Student.query.order_by(Student.is_flagged.desc(), Student.name.asc())
+        # Admin sees all students, grouped by polo, sorted by score desc then name asc
+        query = Student.query.join(School).order_by(
+            School.polo.asc(),
+            Student.score.desc().nullslast(),
+            Student.name.asc()
+        )
 
         status = request.args.get("status")
         if status:
@@ -32,6 +36,10 @@ def review_queue():
         if search:
             query = query.filter(Student.name.ilike(f"%{search}%"))
 
+        polo = request.args.get("polo")
+        if polo:
+            query = query.filter(School.polo.ilike(f"%{polo}%"))
+
         result = paginate_query(query)
         items = []
         for s in result["items"]:
@@ -39,6 +47,7 @@ def review_queue():
                 "student_id": s.id,
                 "student_name": s.name,
                 "school_name": s.school.name if s.school else None,
+                "polo": s.school.polo if s.school else None,
                 "score": s.score,
                 "is_flagged": s.is_flagged,
                 "flag_level": s.flag_level,
