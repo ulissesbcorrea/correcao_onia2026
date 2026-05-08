@@ -26,6 +26,7 @@
             <div class="navbar-nav ms-auto align-items-center">
                 <div id="progressWidget" class="d-flex align-items-center gap-2 me-3"></div>
                 <a class="btn btn-outline-light btn-sm me-2" href="#" onclick="logout()">Sair</a>
+                <a class="btn btn-outline-info btn-sm me-2" href="#" onclick="switchToEvaluator()">🔍 Modo Avaliador</a>
             </div>
         </div>
     </nav>
@@ -196,6 +197,7 @@
     if(!TOKEN){window.location=BASE+'/login';}
     const H = {'Content-Type':'application/json','Authorization':`Bearer ${TOKEN}`};
     function logout(){localStorage.clear();window.location=BASE+'/login';}
+    function switchToEvaluator(){window.location=BASE+'/evaluator';}
     async function get(url){const r=await fetch(BASE+url,{headers:H});if(r.status===401){localStorage.clear();window.location=BASE+'/login';}return r.json();}
     async function post(url,data){const r=await fetch(BASE+url,{method:'POST',headers:H,body:JSON.stringify(data||{})});if(r.status===401){localStorage.clear();window.location=BASE+'/login';}return r.json();}
     function toast(m,t='success'){const c=document.getElementById('toastContainer');

@@ -14,7 +14,41 @@ from app.upload.image_service import find_student_images, GABARITOS_DIR
 @evaluator_required
 def review_queue():
     user_id = int(get_jwt_identity())
+    user = db.session.get(Evaluator, user_id)
 
+    if user and user.role == "admin":
+        # Admin sees all students
+        query = Student.query.order_by(Student.is_flagged.desc(), Student.name.asc())
+
+        status = request.args.get("status")
+        if status:
+            query = query.filter(Student.status == status)
+
+        flagged = request.args.get("flagged")
+        if flagged is not None:
+            query = query.filter(Student.is_flagged == (flagged.lower() == "true"))
+
+        search = request.args.get("search")
+        if search:
+            query = query.filter(Student.name.ilike(f"%{search}%"))
+
+        result = paginate_query(query)
+        items = []
+        for s in result["items"]:
+            items.append({
+                "student_id": s.id,
+                "student_name": s.name,
+                "school_name": s.school.name if s.school else None,
+                "score": s.score,
+                "is_flagged": s.is_flagged,
+                "flag_level": s.flag_level,
+                "student_status": s.status,
+                "decision": s.status,
+            })
+        result["items"] = items
+        return jsonify(result)
+
+    # Regular evaluator: only assigned students
     query = Review.query.filter_by(evaluator_id=user_id).join(Student).order_by(
         Student.is_flagged.desc(), Student.name.asc()
     )
@@ -141,6 +175,7 @@ def reject(student_id):
 
 def _make_decision(student_id, decision):
     user_id = int(get_jwt_identity())
+    user = db.session.get(Evaluator, user_id)
     student = db.session.get(Student, student_id)
     if not student:
         return jsonify({"error": "Student not found"}), 404
@@ -150,7 +185,13 @@ def _make_decision(student_id, decision):
 
     review = Review.query.filter_by(student_id=student_id, evaluator_id=user_id).first()
     if not review:
-        return jsonify({"error": "Student not assigned to you"}), 403
+        # Admin can review without prior assignment
+        if user and user.role == "admin":
+            review = Review(student_id=student_id, evaluator_id=user_id, decision="pending")
+            db.session.add(review)
+            db.session.flush()
+        else:
+            return jsonify({"error": "Student not assigned to you"}), 403
 
     if review.decision != "pending":
         return jsonify({"error": f"Already reviewed: {review.decision}"}), 409

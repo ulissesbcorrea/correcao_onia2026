@@ -53,6 +53,17 @@ def create_app(config_name=None):
             return render_template("admin/dashboard.html", session={"user": user.to_dict()})
         return render_template("evaluator/assignments.html", session={"user": user.to_dict()})
 
+    @flask_app.route("/evaluator")
+    @jwt_required(optional=True)
+    def evaluator_page():
+        user_id = get_jwt_identity()
+        if not user_id:
+            return render_template("login.html")
+        user = db.session.get(Evaluator, int(user_id))
+        if not user:
+            return render_template("login.html")
+        return render_template("evaluator/assignments.html", session={"user": user.to_dict()})
+
     @flask_app.route("/login")
     def login_page():
         return render_template("login.html")

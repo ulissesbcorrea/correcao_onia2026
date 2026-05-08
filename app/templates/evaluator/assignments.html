@@ -22,6 +22,7 @@
             <a class="navbar-brand fw-bold" href="/dashboard">🔍 ONIA</a>
             <div class="navbar-nav ms-auto align-items-center">
                 <div id="progressWidget" class="d-flex align-items-center gap-2 me-3"></div>
+                <a class="btn btn-outline-info btn-sm me-2" href="#" onclick="switchToAdmin()">⚙️ Admin</a>
                 <a class="btn btn-outline-light btn-sm" href="#" onclick="logout()">Sair</a>
             </div>
         </div>
@@ -86,6 +87,7 @@
     const BASE = localStorage.getItem('base_path') || '';
     const T=localStorage.getItem('access_token'),H={'Content-Type':'application/json','Authorization':`Bearer ${T}`};
     function logout(){localStorage.clear();window.location=BASE+'/login';}
+    function switchToAdmin(){window.location=BASE+'/dashboard';}
     async function get(u){const r=await fetch(BASE+u,{headers:H});if(r.status===401)window.location=BASE+'/login';return r.json()}
     async function post(u,d){const r=await fetch(BASE+u,{method:'POST',headers:H,body:JSON.stringify(d||{})});if(r.status===401)window.location=BASE+'/login';return r.json()}
     function toast(m,t='success'){const c=document.getElementById('toastContainer');c.innerHTML=`<div class="toast align-items-center text-white ${t==='error'?'bg-danger':'bg-success'} border-0"><div class="d-flex"><div class="toast-body">${m}</div></div></div>`;new bootstrap.Toast(c.firstElementChild,{delay:3000}).show()}
