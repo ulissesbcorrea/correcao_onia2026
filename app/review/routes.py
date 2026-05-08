@@ -289,3 +289,29 @@ def fraud_clusters():
         })
 
     return jsonify({"clusters": clusters, "total_pairs": len(seen_pairs)})
+
+
+@review_bp.route("/ai-compare/<int:student1_id>/<int:student2_id>")
+@evaluator_required
+def ai_compare(student1_id, student2_id):
+    """Deep AI comparison of two students' justifications using NVIDIA vision model."""
+    from app.fraud.ocr import compare_justifications
+
+    s1 = db.session.get(Student, student1_id)
+    s2 = db.session.get(Student, student2_id)
+    if not s1 or not s2:
+        return jsonify({"error": "Student not found"}), 404
+
+    imgs1 = find_student_images(s1.xlsx_id, s1.name)
+    imgs2 = find_student_images(s2.xlsx_id, s2.name)
+
+    if not imgs1 or not imgs2:
+        return jsonify({"error": "Images not found for one or both students"}), 404
+
+    result = compare_justifications(imgs1[0]["path"], imgs2[0]["path"])
+
+    return jsonify({
+        "student1": {"id": s1.id, "name": s1.name},
+        "student2": {"id": s2.id, "name": s2.name},
+        "comparison": result,
+    })

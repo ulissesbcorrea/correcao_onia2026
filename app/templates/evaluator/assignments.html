@@ -250,6 +250,17 @@
 
     loadQueue();loadProgress();setInterval(loadProgress,30000);
 
+    async function aiAnalyze(sid1, sid2, btn){
+        btn.disabled=true;btn.textContent='⏳';
+        const d=await get(`/api/review/ai-compare/${sid1}/${sid2}`);
+        btn.disabled=false;btn.textContent='🤖 IA';
+        if(!d||!d.comparison)return;
+        const c=d.comparison;
+        toast(`🤖 IA: ${c.similarity||0}% similar — ${c.analysis||''}${c.same_handwriting?' | MESMA CALIGRAFIA!':''}`,
+            c.similarity>=80?'error':'success');
+        if(c.same_handwriting) alert('⚠️ ALERTA: A IA detectou que a caligrafia parece ser da MESMA PESSOA!');
+    }
+
     async function loadFraudClusters(){
         const d=await get('/api/review/fraud-clusters');
         if(!d||!d.clusters)return;
@@ -264,7 +275,7 @@
                 const sim=pair.similarity,sc=sim>=80?'danger':sim>=60?'warning':'secondary';
                 html+=`<div class="card m-2"><div class="card-header d-flex justify-content-between py-1">
                     <span><span class="badge bg-${sc} me-2">${sim}% similar</span><span class="badge bg-${pair.flag_level==='critical'?'danger':'warning'}">${pair.flag_level}</span></span>
-                    ${pair.student1.status==='pending'?`<div class="btn-group btn-group-sm"><button class="btn btn-outline-success btn-sm py-0" onclick="decide(${pair.student1.id},'approved');decide(${pair.student2.id},'approved')">✅ Ambos</button><button class="btn btn-outline-danger btn-sm py-0" onclick="decide(${pair.student1.id},'rejected');decide(${pair.student2.id},'rejected')">❌ Ambos</button></div>`:`<small class="text-muted">${pair.student1.status}</small>`}</div>
+                    ${pair.student1.status==='pending'?`<div class="btn-group btn-group-sm"><button class="btn btn-outline-success btn-sm py-0" onclick="decide(${pair.student1.id},'approved');decide(${pair.student2.id},'approved')">✅ Ambos</button><button class="btn btn-outline-danger btn-sm py-0" onclick="decide(${pair.student1.id},'rejected');decide(${pair.student2.id},'rejected')">❌ Ambos</button><button class="btn btn-outline-info btn-sm py-0" onclick="aiAnalyze(${pair.student1.id},${pair.student2.id},this)">🤖 IA</button></div>`:`<small class="text-muted">${pair.student1.status}</small>`}</div>
                 <div class="card-body p-2"><div class="row">
                 <div class="col-6 border-end"><strong>${pair.student1.name}</strong> <small>(${pair.student1.score}/20)</small>
                 <div class="d-flex flex-wrap gap-1 mt-1">${pair.student1.images.slice(0,3).map(i=>`<img src="${BASE+i.url}" class="photo-thumb" onclick="showPhoto('${BASE+i.url}')" style="width:48%;height:140px;object-fit:contain" onerror="this.style.display='none'">`).join('')||'<small class="text-muted">Sem imagens</small>'}</div></div>
