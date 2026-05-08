@@ -57,10 +57,6 @@ def create_app(config_name=None):
     def login_page():
         return render_template("login.html")
 
-    @flask_app.route("/logout")
-    def logout():
-        return redirect(url_for("login_page"))
-
     @flask_app.errorhandler(400)
     def bad_request(error):
         return jsonify({"error": "Bad request"}), 400

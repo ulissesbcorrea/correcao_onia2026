@@ -121,7 +121,17 @@
                 <button class="btn-close" onclick="hideFraudList()"></button>
             </div>
             <div class="card-body p-0">
-                <div style="max-height: 60vh; overflow-y: auto;">
+                <div class="p-2 d-flex flex-wrap gap-2 align-items-center">
+                    <input class="form-control form-control-sm" style="width:180px" placeholder="Buscar aluno..." id="fraudSearch" oninput="loadFraudList()">
+                    <select class="form-select form-select-sm" style="width:120px" id="fraudLevel" onchange="loadFraudList()">
+                        <option value="">Todos os níveis</option>
+                        <option value="critical">Crítico</option>
+                        <option value="high">Alto</option>
+                        <option value="medium">Médio</option>
+                        <option value="low">Baixo</option>
+                    </select>
+                </div>
+                <div style="max-height: 55vh; overflow-y: auto;">
                     <table class="table table-hover table-sm mb-0">
                         <thead><tr><th>Aluno</th><th>Escola</th><th>Nível</th><th>Motivo</th><th>Aluno Relacionado</th></tr></thead>
                         <tbody id="fraudListBody"></tbody>
@@ -284,7 +294,12 @@
 
     async function loadFraudList(page=1){
         currentFraudPage=page;
-        const d=await get(`/api/fraud/alerts?page=${page}&per_page=30`);
+        const search=document.getElementById('fraudSearch').value;
+        const level=document.getElementById('fraudLevel').value;
+        let url=`/api/fraud/alerts?page=${page}&per_page=30`;
+        if(search) url+=`&search=${encodeURIComponent(search)}`;
+        if(level) url+=`&level=${level}`;
+        const d=await get(url);
         if(!d)return;
         const t=document.getElementById('fraudListBody');
         t.innerHTML=d.items.map(f=>{

@@ -11,19 +11,25 @@ from app.utils.pagination import paginate_query
 @fraud_bp.route("/alerts", methods=["GET"])
 @jwt_required()
 def list_alerts():
-    query = FraudFlag.query.order_by(FraudFlag.created_at.desc())
+    query = FraudFlag.query.join(Student)
 
     level = request.args.get("level")
     if level:
-        query = query.filter_by(level=level)
+        query = query.filter(FraudFlag.level == level)
+
+    search = request.args.get("search")
+    if search:
+        query = query.filter(Student.name.ilike(f"%{search}%"))
 
     school = request.args.get("school")
     if school:
-        query = query.join(Student).join(School).filter(School.name.ilike(f"%{school}%"))
+        query = query.join(School).filter(School.name.ilike(f"%{school}%"))
 
     resolved = request.args.get("resolved")
     if resolved is not None:
-        query = query.filter_by(resolved=resolved.lower() == "true")
+        query = query.filter(FraudFlag.resolved == (resolved.lower() == "true"))
+
+    query = query.order_by(FraudFlag.created_at.desc())
 
     result = paginate_query(query)
     result["items"] = [f.to_dict() for f in result["items"]]
