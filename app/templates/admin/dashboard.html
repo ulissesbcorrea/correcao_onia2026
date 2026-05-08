@@ -89,16 +89,6 @@
             <div class="card-body p-0">
                 <div class="p-2 d-flex flex-wrap gap-2 align-items-center">
                     <input class="form-control form-control-sm" style="width:180px" placeholder="Buscar nome..." id="listSearch" oninput="loadStudentList()">
-                    <select class="form-select form-select-sm" style="width:130px" id="listSortBy" onchange="loadStudentList()">
-                        <option value="name">Nome</option>
-                        <option value="score">Acertos</option>
-                        <option value="school">Escola</option>
-                        <option value="polo">Polo</option>
-                    </select>
-                    <select class="form-select form-select-sm" style="width:100px" id="listOrder" onchange="loadStudentList()">
-                        <option value="asc">Cresc ↑</option>
-                        <option value="desc">Decresc ↓</option>
-                    </select>
                     <select class="form-select form-select-sm" style="width:160px" id="listPolo" onchange="loadStudentList()">
                         <option value="">Todos os polos</option>
                     </select>
@@ -106,7 +96,14 @@
                 </div>
                 <div style="max-height: 55vh; overflow-y: auto;">
                     <table class="table table-hover table-sm mb-0">
-                        <thead><tr><th>Nome</th><th>Escola</th><th>Polo</th><th>Acertos</th><th>Flag</th><th>Status</th></tr></thead>
+                        <thead><tr>
+                            <th style="cursor:pointer" onclick="sortList('name')">Nome <span id="sortIcon_name"></span></th>
+                            <th style="cursor:pointer" onclick="sortList('school')">Escola <span id="sortIcon_school"></span></th>
+                            <th style="cursor:pointer" onclick="sortList('polo')">Polo <span id="sortIcon_polo"></span></th>
+                            <th style="cursor:pointer" onclick="sortList('score')">Acertos <span id="sortIcon_score"></span></th>
+                            <th>Flag</th>
+                            <th>Status</th>
+                        </tr></thead>
                         <tbody id="studentListBody"></tbody>
                     </table>
                 </div>
@@ -133,7 +130,13 @@
                 </div>
                 <div style="max-height: 55vh; overflow-y: auto;">
                     <table class="table table-hover table-sm mb-0">
-                        <thead><tr><th>Aluno</th><th>Escola</th><th>Nível</th><th>Motivo</th><th>Aluno Relacionado</th></tr></thead>
+                        <thead><tr>
+                            <th style="cursor:pointer" onclick="sortFraud('student')">Aluno <span id="fsort_student"></span></th>
+                            <th style="cursor:pointer" onclick="sortFraud('school')">Escola <span id="fsort_school"></span></th>
+                            <th style="cursor:pointer" onclick="sortFraud('level')">Nível <span id="fsort_level"></span></th>
+                            <th>Motivo</th>
+                            <th>Aluno Relacionado</th>
+                        </tr></thead>
                         <tbody id="fraudListBody"></tbody>
                     </table>
                 </div>
@@ -200,6 +203,34 @@
         new bootstrap.Toast(c.firstElementChild,{delay:3000}).show();}
 
     let goalShown=false, currentFilter='', currentFraudPage=1, currentListPage=1;
+    let currentSort='name', currentOrder='asc';
+    let fraudSort='created', fraudOrder='desc';
+
+    function sortList(field){
+        if(currentSort===field){ currentOrder=currentOrder==='asc'?'desc':'asc'; }
+        else { currentSort=field; currentOrder='asc'; }
+        updateSortIcons();
+        loadStudentList();
+    }
+
+    function sortFraud(field){
+        if(fraudSort===field){ fraudOrder=fraudOrder==='asc'?'desc':'asc'; }
+        else { fraudSort=field; fraudOrder='asc'; }
+        updateFraudSortIcons();
+        loadFraudList();
+    }
+
+    function updateSortIcons(){
+        document.querySelectorAll('[id^=sortIcon_]').forEach(el=>el.textContent='');
+        const icon=document.getElementById('sortIcon_'+currentSort);
+        if(icon) icon.textContent=currentOrder==='asc'?' ▲':' ▼';
+    }
+
+    function updateFraudSortIcons(){
+        document.querySelectorAll('[id^=fsort_]').forEach(el=>el.textContent='');
+        const icon=document.getElementById('fsort_'+fraudSort);
+        if(icon) icon.textContent=fraudOrder==='asc'?' ▲':' ▼';
+    }
 
     async function loadStats(){
         const d=await get('/api/dashboard/summary');
@@ -256,10 +287,8 @@
     async function loadStudentList(page=1){
         currentListPage=page;
         const search=document.getElementById('listSearch').value;
-        const sortBy=document.getElementById('listSortBy').value;
-        const order=document.getElementById('listOrder').value;
         const polo=document.getElementById('listPolo').value;
-        let url=`/api/dashboard/submissions?page=${page}&per_page=40&sort_by=${sortBy}&order=${order}`;
+        let url=`/api/dashboard/submissions?page=${page}&per_page=40&sort_by=${currentSort}&order=${currentOrder}`;
         if(currentFilter) url+=`&status=${currentFilter}`;
         if(search) url+=`&search=${encodeURIComponent(search)}`;
         if(polo) url+=`&polo=${encodeURIComponent(polo)}`;
@@ -271,7 +300,7 @@
         let prevPolo=null, html='';
         d.items.forEach(s=>{
             const polo=s.polo||'-';
-            if(sortBy==='polo' && polo!==prevPolo){
+            if(currentSort==='polo' && polo!==prevPolo){
                 html+=`<tr class="table-secondary"><td colspan="6"><strong>📍 ${polo}</strong></td></tr>`;
                 prevPolo=polo;
             }
@@ -297,7 +326,7 @@
         currentFraudPage=page;
         const search=document.getElementById('fraudSearch').value;
         const level=document.getElementById('fraudLevel').value;
-        let url=`/api/fraud/alerts?page=${page}&per_page=30`;
+        let url=`/api/fraud/alerts?page=${page}&per_page=30&sort_by=${fraudSort}&order=${fraudOrder}`;
         if(search) url+=`&search=${encodeURIComponent(search)}`;
         if(level) url+=`&level=${level}`;
         const d=await get(url);

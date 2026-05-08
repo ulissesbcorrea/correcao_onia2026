@@ -29,7 +29,19 @@ def list_alerts():
     if resolved is not None:
         query = query.filter(FraudFlag.resolved == (resolved.lower() == "true"))
 
-    query = query.order_by(FraudFlag.created_at.desc())
+    sort_by = request.args.get("sort_by", "created")
+    order = request.args.get("order", "desc")
+    sort_map = {
+        "student": Student.name,
+        "school": School.name,
+        "level": FraudFlag.level,
+        "created": FraudFlag.created_at,
+    }
+    sort_col = sort_map.get(sort_by, FraudFlag.created_at)
+    if order == "desc":
+        query = query.order_by(sort_col.desc(), Student.name.asc())
+    else:
+        query = query.order_by(sort_col.asc(), Student.name.asc())
 
     result = paginate_query(query)
     result["items"] = [f.to_dict() for f in result["items"]]
