@@ -8,6 +8,9 @@ class Config:
     SQLALCHEMY_DATABASE_URI = os.environ.get("DATABASE_URL", f"sqlite:///{os.path.join(BASE_DIR, 'onia.db')}")
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY", "jwt-secret-change-in-production")
+    JWT_TOKEN_LOCATION = ["headers", "cookies"]
+    JWT_COOKIE_SECURE = False  # True in production with HTTPS
+    JWT_COOKIE_CSRF_PROTECT = False
     JWT_ACCESS_TOKEN_EXPIRES = 900  # 15 minutes
     JWT_REFRESH_TOKEN_EXPIRES = 604800  # 7 days
     UPLOAD_FOLDER = os.path.join(BASE_DIR, "uploads")

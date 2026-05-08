@@ -45,10 +45,10 @@ def create_app(config_name=None):
     def dashboard_page():
         user_id = get_jwt_identity()
         if not user_id:
-            return redirect(url_for("login_page"))
+            return render_template("login.html")
         user = db.session.get(Evaluator, int(user_id))
         if not user:
-            return redirect(url_for("login_page"))
+            return render_template("login.html")
         if user.role == "admin":
             return render_template("admin/dashboard.html", session={"user": user.to_dict()})
         return render_template("evaluator/assignments.html", session={"user": user.to_dict()})

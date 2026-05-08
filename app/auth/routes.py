@@ -3,6 +3,8 @@ from flask import request, jsonify
 from flask_jwt_extended import (
     create_access_token,
     create_refresh_token,
+    set_access_cookies,
+    set_refresh_cookies,
     jwt_required,
     get_jwt_identity,
 )
@@ -28,11 +30,14 @@ def login():
     access_token = create_access_token(identity=str(user.id))
     refresh_token = create_refresh_token(identity=str(user.id))
 
-    return jsonify({
+    response = jsonify({
         "access_token": access_token,
         "refresh_token": refresh_token,
         "user": user.to_dict(),
     })
+    set_access_cookies(response, access_token)
+    set_refresh_cookies(response, refresh_token)
+    return response
 
 
 @auth_bp.route("/refresh", methods=["POST"])
