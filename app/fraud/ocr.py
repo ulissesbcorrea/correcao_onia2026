@@ -11,7 +11,7 @@ import urllib.request
 
 NVIDIA_API_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
 NVIDIA_API_KEY = "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"
-NVIDIA_MODEL = "qwen/qwen2.5-vl-72b-instruct"
+NVIDIA_MODEL = os.environ.get("NVIDIA_MODEL", "nvidia/llama-3.1-nemotron-nano-vl-8b-v1")
 
 PROMPT_OCR = """Extraia TODO o texto manuscrito visível nesta imagem de justificativa de prova.
 Retorne APENAS o texto extraído, palavra por palavra, exatamente como aparece na imagem.
