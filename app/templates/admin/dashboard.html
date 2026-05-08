@@ -87,10 +87,26 @@
                 <button class="btn-close" onclick="hideList()"></button>
             </div>
             <div class="card-body p-0">
-                <div class="p-2"><input class="form-control form-control-sm" placeholder="Buscar por nome..." id="listSearch" oninput="loadStudentList()"></div>
-                <div style="max-height: 60vh; overflow-y: auto;">
+                <div class="p-2 d-flex flex-wrap gap-2 align-items-center">
+                    <input class="form-control form-control-sm" style="width:180px" placeholder="Buscar nome..." id="listSearch" oninput="loadStudentList()">
+                    <select class="form-select form-select-sm" style="width:130px" id="listSortBy" onchange="loadStudentList()">
+                        <option value="name">Nome</option>
+                        <option value="score">Acertos</option>
+                        <option value="school">Escola</option>
+                        <option value="polo">Polo</option>
+                    </select>
+                    <select class="form-select form-select-sm" style="width:100px" id="listOrder" onchange="loadStudentList()">
+                        <option value="asc">Cresc ↑</option>
+                        <option value="desc">Decresc ↓</option>
+                    </select>
+                    <select class="form-select form-select-sm" style="width:160px" id="listPolo" onchange="loadStudentList()">
+                        <option value="">Todos os polos</option>
+                    </select>
+                    <small class="text-muted" id="listGroupInfo"></small>
+                </div>
+                <div style="max-height: 55vh; overflow-y: auto;">
                     <table class="table table-hover table-sm mb-0">
-                        <thead><tr><th>Nome</th><th>Escola</th><th>Cidade</th><th>Acertos</th><th>Flag</th><th>Status</th></tr></thead>
+                        <thead><tr><th>Nome</th><th>Escola</th><th>Polo</th><th>Acertos</th><th>Flag</th><th>Status</th></tr></thead>
                         <tbody id="studentListBody"></tbody>
                     </table>
                 </div>
@@ -214,25 +230,48 @@
         const titles={approved:'✅ Alunos Aprovados',rejected:'❌ Alunos Rejeitados',pending:'⏳ Alunos Pendentes'};
         document.getElementById('listTitle').textContent=titles[filter]||'📋 Todos os Alunos';
         document.getElementById('listSearch').value='';
+        loadPolos();
         loadStudentList();
+    }
+
+    async function loadPolos(){
+        const d=await get('/api/dashboard/polos');
+        if(!d)return;
+        const sel=document.getElementById('listPolo');
+        sel.innerHTML='<option value="">Todos os polos</option>'+d.polos.map(p=>`<option value="${p}">${p}</option>`).join('');
     }
 
     async function loadStudentList(page=1){
         currentListPage=page;
         const search=document.getElementById('listSearch').value;
-        let url=`/api/dashboard/submissions?page=${page}&per_page=30`;
+        const sortBy=document.getElementById('listSortBy').value;
+        const order=document.getElementById('listOrder').value;
+        const polo=document.getElementById('listPolo').value;
+        let url=`/api/dashboard/submissions?page=${page}&per_page=40&sort_by=${sortBy}&order=${order}`;
         if(currentFilter) url+=`&status=${currentFilter}`;
         if(search) url+=`&search=${encodeURIComponent(search)}`;
+        if(polo) url+=`&polo=${encodeURIComponent(polo)}`;
         const d=await get(url);
         if(!d)return;
         const t=document.getElementById('studentListBody');
-        t.innerHTML=d.items.map(s=>{
+
+        // Group by polo if sorted by polo
+        let prevPolo=null, html='';
+        d.items.forEach(s=>{
+            const polo=s.polo||'-';
+            if(sortBy==='polo' && polo!==prevPolo){
+                html+=`<tr class="table-secondary"><td colspan="6"><strong>📍 ${polo}</strong></td></tr>`;
+                prevPolo=polo;
+            }
             let rc='';if(s.flag_level==='critical')rc='table-critical';else if(s.is_flagged)rc='table-warning-custom';
-            return `<tr class="${rc}"><td>${s.name}</td><td>${s.school_name||'-'}</td><td>${s.school_city||''} ${s.school_state||''}</td><td>${s.score??'-'}</td><td>${s.is_flagged?'⚠️ '+s.flag_level:'-'}</td><td>${s.status}</td></tr>`;
-        }).join('');
+            html+=`<tr class="${rc}"><td>${s.name}</td><td>${s.school_name||'-'}</td><td>${polo}</td><td><strong>${s.score??'-'}</strong></td><td>${s.is_flagged?'⚠️ '+s.flag_level:'-'}</td><td>${s.status}</td></tr>`;
+        });
+        t.innerHTML=html;
+
         const pg=d.pagination;
         document.getElementById('listPagination').innerHTML=`<small>${pg.page}/${pg.pages} (${pg.total})</small>
             <div class="btn-group btn-group-sm">${pg.has_prev?`<button class="btn btn-outline-secondary" onclick="loadStudentList(${pg.page-1})">◀</button>`:''}${pg.has_next?`<button class="btn btn-outline-secondary" onclick="loadStudentList(${pg.page+1})">▶</button>`:''}</div>`;
+        document.getElementById('listGroupInfo').textContent=polo?`Filtrado: ${polo}`:'';
     }
 
     async function showFraudList(){

@@ -34,26 +34,53 @@ def dashboard_summary_api():
 @dashboard_bp.route("/submissions", methods=["GET"])
 @evaluator_required
 def submission_list_api():
-    query = Student.query.order_by(Student.is_flagged.desc(), Student.name.asc())
+    query = Student.query.join(School)
 
     status = request.args.get("status")
     if status:
-        query = query.filter_by(status=status)
+        query = query.filter(Student.status == status)
 
     school = request.args.get("school")
     if school:
-        query = query.join(School).filter(School.name.ilike(f"%{school}%"))
+        query = query.filter(School.name.ilike(f"%{school}%"))
+
+    polo = request.args.get("polo")
+    if polo:
+        query = query.filter(School.polo.ilike(f"%{polo}%"))
 
     has_fraud = request.args.get("has_fraud")
     if has_fraud is not None:
-        query = query.filter_by(is_flagged=has_fraud.lower() == "true")
+        query = query.filter(Student.is_flagged == (has_fraud.lower() == "true"))
 
     search = request.args.get("search")
     if search:
         query = query.filter(Student.name.ilike(f"%{search}%"))
 
+    sort_by = request.args.get("sort_by", "name")
+    order = request.args.get("order", "asc")
+
+    sort_map = {
+        "name": Student.name,
+        "score": Student.score,
+        "school": School.name,
+        "polo": School.polo,
+        "status": Student.status,
+    }
+    sort_col = sort_map.get(sort_by, Student.name)
+    if order == "desc":
+        query = query.order_by(sort_col.desc())
+    else:
+        query = query.order_by(sort_col.asc())
+
+    query = query.order_by(Student.is_flagged.desc())
+
     result = paginate_query(query)
-    result["items"] = [s.to_dict() for s in result["items"]]
+    items = []
+    for s in result["items"]:
+        d = s.to_dict()
+        d["polo"] = s.school.polo if s.school else None
+        items.append(d)
+    result["items"] = items
     return jsonify(result)
 
 
@@ -66,6 +93,13 @@ def approval_counter_api():
         db.session.add(counter)
         db.session.commit()
     return jsonify(counter.to_dict())
+
+
+@dashboard_bp.route("/polos", methods=["GET"])
+@evaluator_required
+def list_polos():
+    polos = db.session.query(School.polo).filter(School.polo.isnot(None), School.polo != "").distinct().order_by(School.polo).all()
+    return jsonify({"polos": [p[0] for p in polos]})
 
 
 # HTML page routes
