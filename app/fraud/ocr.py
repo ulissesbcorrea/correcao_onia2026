@@ -13,11 +13,12 @@ NVIDIA_API_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
 NVIDIA_API_KEY = "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"
 NVIDIA_MODEL = os.environ.get("NVIDIA_MODEL", "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning")
 
-PROMPT_OCR = """Extraia TODO o texto manuscrito visível nesta imagem de justificativa de prova.
-Retorne APENAS o texto extraído, palavra por palavra, exatamente como aparece na imagem.
-Preserve a formatação, parágrafos e quebras de linha.
-Se houver equações, descreva-as em texto.
-Não adicione comentários, explicações ou markdown."""
+PROMPT_OCR = """Transcreva EXATAMENTE o texto manuscrito visível nesta imagem.
+Regras:
+- Retorne APENAS o texto transcrito, sem introduções, comentários ou markdown
+- Preserve acentos, pontuação e quebras de linha
+- Se houver equações, escreva-as em texto
+- Ignore carimbos e logotipos"""
 
 
 def _encode_image(image_path):
