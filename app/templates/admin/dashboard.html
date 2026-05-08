@@ -25,7 +25,7 @@
             <a class="navbar-brand fw-bold" href="/dashboard">🔍 ONIA Admin</a>
             <div class="navbar-nav ms-auto align-items-center">
                 <div id="progressWidget" class="d-flex align-items-center gap-2 me-3"></div>
-                <a class="btn btn-outline-light btn-sm me-2" href="/logout">Sair</a>
+                <a class="btn btn-outline-light btn-sm me-2" href="#" onclick="logout()">Sair</a>
             </div>
         </div>
     </nav>
@@ -181,6 +181,7 @@
     const BASE = localStorage.getItem('base_path') || '';
     const TOKEN = localStorage.getItem('access_token');
     const H = {'Content-Type':'application/json','Authorization':`Bearer ${TOKEN}`};
+    function logout(){localStorage.clear();window.location=BASE+'/login';}
     async function get(url){const r=await fetch(BASE+url,{headers:H});if(r.status===401)window.location=BASE+'/login';return r.json();}
     async function post(url,data){const r=await fetch(BASE+url,{method:'POST',headers:H,body:JSON.stringify(data||{})});if(r.status===401)window.location=BASE+'/login';return r.json();}
     function toast(m,t='success'){const c=document.getElementById('toastContainer');
@@ -288,7 +289,7 @@
         const t=document.getElementById('fraudListBody');
         t.innerHTML=d.items.map(f=>{
             let badge='bg-warning';if(f.level==='critical')badge='bg-danger';else if(f.level==='low')badge='bg-info';
-            return `<tr><td>${f.student_name||'-'}</td><td>${f.student_name||'-'}</td><td><span class="badge ${badge}">${f.level}</span></td><td><small>${f.reason||''}</small></td><td><small>${f.related_student_name||'-'}</small></td></tr>`;
+            return `<tr><td>${f.student_name||'-'}</td><td>${f.school_name||'-'}</td><td><span class="badge ${badge}">${f.level}</span></td><td><small>${f.reason||''}</small></td><td><small>${f.related_student_name||'-'}</small></td></tr>`;
         }).join('');
         const pg=d.pagination;
         document.getElementById('fraudPagination').innerHTML=`<small>${pg.page}/${pg.pages} (${pg.total})</small>

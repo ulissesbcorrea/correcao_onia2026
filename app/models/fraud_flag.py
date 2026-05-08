@@ -19,10 +19,14 @@ class FraudFlag(db.Model):
     related_student = db.relationship("Student", foreign_keys=[related_student_id])
 
     def to_dict(self):
+        school_name = None
+        if self.student and self.student.school:
+            school_name = self.student.school.name
         return {
             "id": self.id,
             "student_id": self.student_id,
             "student_name": self.student.name if self.student else None,
+            "school_name": school_name,
             "source": self.source,
             "level": self.level,
             "reason": self.reason,
