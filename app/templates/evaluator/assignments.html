@@ -29,6 +29,14 @@
     </nav>
 
     <div class="container-fluid mt-4">
+        <!-- Tabs -->
+        <ul class="nav nav-tabs mb-3">
+            <li class="nav-item"><a class="nav-link active" href="#" onclick="switchTab('queue')">📋 Fila</a></li>
+            <li class="nav-item"><a class="nav-link" href="#" onclick="switchTab('fraud')">⚠️ Revisão de Fraudes</a></li>
+        </ul>
+
+        <!-- Queue Tab -->
+        <div id="tabQueue">
         <div class="row">
             <!-- Student List -->
             <div class="col-md-7">
@@ -66,6 +74,16 @@
             </div>
         </div>
     </div>
+    </div><!-- /tabQueue -->
+
+    <!-- Fraud Review Tab -->
+    <div id="tabFraud" style="display:none">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h5>⚠️ Revisão de Fraudes — Pares Suspeitos</h5>
+            <div><span id="fraudPairCounter" class="text-muted small"></span></div>
+        </div>
+        <div id="fraudClusters"></div>
+    </div>
 
     <!-- Photo Modal -->
     <div class="modal fade" id="photoModal" tabindex="-1"><div class="modal-dialog modal-lg modal-dialog-centered"><div class="modal-content">
@@ -93,6 +111,15 @@
     function toast(m,t='success'){const c=document.getElementById('toastContainer');c.innerHTML=`<div class="toast align-items-center text-white ${t==='error'?'bg-danger':'bg-success'} border-0"><div class="d-flex"><div class="toast-body">${m}</div></div></div>`;new bootstrap.Toast(c.firstElementChild,{delay:3000}).show()}
 
     let currentPage=1,currentFilter='',goalShown=false,currentStudent=null;
+    let currentFraudSchool=null, currentFraudPair=0;
+
+    function switchTab(tab){
+        document.querySelectorAll('.nav-link').forEach(l=>l.classList.remove('active'));
+        event.target.classList.add('active');
+        document.getElementById('tabQueue').style.display=tab==='queue'?'block':'none';
+        document.getElementById('tabFraud').style.display=tab==='fraud'?'block':'none';
+        if(tab==='fraud') loadFraudClusters();
+    }
 
     async function loadQueue(page=1){
         currentPage=page;
@@ -222,6 +249,37 @@
     }
 
     loadQueue();loadProgress();setInterval(loadProgress,30000);
+
+    async function loadFraudClusters(){
+        const d=await get('/api/review/fraud-clusters');
+        if(!d||!d.clusters)return;
+        document.getElementById('fraudPairCounter').textContent=`${d.total_pairs} pares suspeitos`;
+        const schools=Object.keys(d.clusters).sort();
+        let html='<div class="accordion" id="fraudAcc">';
+        schools.forEach((school,si)=>{
+            const pairs=d.clusters[school];
+            html+=`<div class="accordion-item"><h2 class="accordion-header"><button class="accordion-button ${si>0?'collapsed':''}" data-bs-toggle="collapse" data-bs-target="#fc${si}">${school} — ${pairs.length} par${pairs.length>1?'es':''}</button></h2>
+            <div id="fc${si}" class="accordion-collapse collapse ${si===0?'show':''}" data-bs-parent="#fraudAcc"><div class="accordion-body p-0">`;
+            pairs.forEach(pair=>{
+                const sim=pair.similarity,sc=sim>=80?'danger':sim>=60?'warning':'secondary';
+                html+=`<div class="card m-2"><div class="card-header d-flex justify-content-between py-1">
+                    <span><span class="badge bg-${sc} me-2">${sim}% similar</span><span class="badge bg-${pair.flag_level==='critical'?'danger':'warning'}">${pair.flag_level}</span></span>
+                    ${pair.student1.status==='pending'?`<div class="btn-group btn-group-sm"><button class="btn btn-outline-success btn-sm py-0" onclick="decide(${pair.student1.id},'approved');decide(${pair.student2.id},'approved')">✅ Ambos</button><button class="btn btn-outline-danger btn-sm py-0" onclick="decide(${pair.student1.id},'rejected');decide(${pair.student2.id},'rejected')">❌ Ambos</button></div>`:`<small class="text-muted">${pair.student1.status}</small>`}</div>
+                <div class="card-body p-2"><div class="row">
+                <div class="col-6 border-end"><strong>${pair.student1.name}</strong> <small>(${pair.student1.score}/20)</small>
+                <div class="d-flex flex-wrap gap-1 mt-1">${pair.student1.images.slice(0,3).map(i=>`<img src="${BASE+i.url}" class="photo-thumb" onclick="showPhoto('${BASE+i.url}')" style="width:48%;height:140px;object-fit:contain" onerror="this.style.display='none'">`).join('')||'<small class="text-muted">Sem imagens</small>'}</div></div>
+                <div class="col-6"><strong>${pair.student2.name}</strong> <small>(${pair.student2.score}/20)</small>
+                <div class="d-flex flex-wrap gap-1 mt-1">${pair.student2.images.slice(0,3).map(i=>`<img src="${BASE+i.url}" class="photo-thumb" onclick="showPhoto('${BASE+i.url}')" style="width:48%;height:140px;object-fit:contain" onerror="this.style.display='none'">`).join('')||'<small class="text-muted">Sem imagens</small>'}</div></div></div>
+                ${sim>0?`<div class="mt-2 small text-muted">🔤 Similaridade semântica: <strong>${sim}%</strong> — ${pair.flag_reason||''}</div>`:''}
+                <div class="mt-1 small">${pair.student1.answers.slice(0,5).map(a=>`Q${a.question_number}:${a.selected_option||'-'}`).join(' | ')}</div>
+                <div class="small">${pair.student2.answers.slice(0,5).map(a=>`Q${a.question_number}:${a.selected_option||'-'}`).join(' | ')}</div>
+                </div></div>`;
+            });
+            html+=`</div></div></div>`;
+        });
+        html+='</div>';
+        document.getElementById('fraudClusters').innerHTML=html||'<p class="text-muted p-3">Nenhum par suspeito encontrado.</p>';
+    }
     </script>
 </body>
 </html>

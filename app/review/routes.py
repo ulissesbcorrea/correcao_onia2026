@@ -227,3 +227,65 @@ def _make_decision(student_id, decision):
         "review": review.to_dict(),
         "approval_count": counter.to_dict() if counter else None,
     })
+
+
+@review_bp.route("/fraud-clusters")
+@evaluator_required
+def fraud_clusters():
+    """Return fraud clusters: same-school student pairs with similar answers."""
+    import os as _os
+    from app.fraud.ocr import extract_text
+    from rapidfuzz import fuzz
+
+    flags = FraudFlag.query.filter(
+        FraudFlag.related_student_id.isnot(None),
+        FraudFlag.resolved == False,
+    ).order_by(FraudFlag.level.desc()).all()
+
+    clusters = {}
+    seen_pairs = set()
+
+    for flag in flags:
+        s1_id = flag.student_id
+        s2_id = flag.related_student_id
+        pair_key = tuple(sorted([s1_id, s2_id]))
+        if pair_key in seen_pairs:
+            continue
+        seen_pairs.add(pair_key)
+
+        s1 = db.session.get(Student, s1_id)
+        s2 = db.session.get(Student, s2_id)
+        if not s1 or not s2:
+            continue
+
+        school_name = s1.school.name if s1.school else "Desconhecida"
+        if school_name not in clusters:
+            clusters[school_name] = []
+
+        imgs1 = find_student_images(s1.xlsx_id, s1.name)
+        imgs2 = find_student_images(s2.xlsx_id, s2.name)
+
+        text1 = extract_text(imgs1[0]["path"]) if imgs1 else ""
+        text2 = extract_text(imgs2[0]["path"]) if imgs2 else ""
+
+        similarity = 0
+        if text1 and text2 and len(text1) > 10 and len(text2) > 10:
+            similarity = fuzz.ratio(text1, text2)
+
+        def fmt(s, imgs, txt):
+            return {
+                "id": s.id, "name": s.name, "score": s.score, "status": s.status,
+                "images": [{"name": i["name"], "url": f"/api/review/images/{_os.path.relpath(i['path'], GABARITOS_DIR)}"} for i in imgs],
+                "ocr_text": txt[:500] if txt else "",
+                "answers": [a.to_dict() for a in Answer.query.filter_by(student_id=s.id).order_by(Answer.question_number).all()],
+            }
+
+        clusters[school_name].append({
+            "student1": fmt(s1, imgs1, text1),
+            "student2": fmt(s2, imgs2, text2),
+            "similarity": round(similarity, 1),
+            "flag_level": flag.level,
+            "flag_reason": flag.reason,
+        })
+
+    return jsonify({"clusters": clusters, "total_pairs": len(seen_pairs)})
